@@ -1,0 +1,27 @@
+VectoChat — Product Overview
+
+VectoChat is an AI-powered RAG (Retrieval-Augmented Generation) chatbot built on Azure.
+It combines large language models with a vector search knowledge base to deliver accurate,
+grounded answers from your own documents.
+
+Key Features:
+- Conversational AI powered by Azure AI Foundry (gpt-5.4)
+- Vector search over documents using Azure Cosmos DB NoSQL
+- Session memory with Azure Managed Redis (24-hour conversation history)
+- Document ingestion pipeline for .txt files
+- REST API with FastAPI, deployed on Azure Kubernetes Service (AKS)
+- Health monitoring at /health endpoint
+
+Architecture:
+Users send messages to POST /api/chat. The chatbot:
+1. Retrieves conversation history from Redis (cache) or Cosmos DB (fallback)
+2. Embeds the user query using text-embedding-3-small (1536 dimensions)
+3. Runs vector similarity search in Cosmos DB documents container
+4. Builds a prompt with the top matching chunks and conversation history
+5. Calls gpt-5.4 via the Azure AI Foundry Responses API
+6. Saves the reply to Cosmos DB and updates the Redis cache
+
+API Endpoints:
+- POST /api/chat                  : Send a message, receive a reply with sources
+- GET  /api/history/{session_id}  : Retrieve full conversation history
+- GET  /health                    : Health check showing Redis and Cosmos status

@@ -1,0 +1,108 @@
+VectoChat — Testing Redis and Cosmos DB Data
+
+This guide explains how to inspect and verify data stored in Redis and Cosmos DB
+after conversations and document ingestion.
+
+=== TESTING REDIS ===
+
+Connect to Redis using redis-cli:
+  redis-cli -h redis-chatbot-fordemo123.eastus.redis.azure.net -p 10000 --tls -a <your-redis-key>
+
+Useful commands inside redis-cli:
+
+  KEYS *                          — List all keys in Redis
+  KEYS history:*                  — List all conversation history keys
+  KEYS emb:*                      — List all cached query embedding keys
+  GET "history:<session_id>"      — Retrieve conversation history for a session
+  TTL "history:<session_id>"      — Check remaining TTL in seconds (default 3600s / 1 hour)
+  TTL "emb:<query_text>"          — Check embedding cache TTL (default 86400s / 24 hours)
+  DBSIZE                          — Total number of keys stored
+  INFO memory                     — Redis memory usage stats
+  FLUSHDB                         — WARNING: deletes all keys (use for clean reset only)
+
+Key naming patterns:
+  history:<session_id>            — JSON array of conversation turns
+  emb:<query_text_or_hash>        — 1536-dim embedding vector as JSON array
+
+Example session to inspect after chatting:
+  1. Chat at POST /api/chat with session_id = "test-123"
+  2. Run: GET "history:test-123"
+  3. You will see: [{"role":"user","content":"..."},{"role":"assistant","content":"..."}]
+
+=== TESTING COSMOS DB ===
+
+Option 1 — Azure Portal (easiest):
+  1. Go to portal.azure.com
+  2. Open account: mynosqldbcomosb001
+  3. Click Data Explorer
+  4. Navigate to chatbot_db > conversations > Items  (chat history)
+  5. Navigate to chatbot_db > documents > Items       (RAG vector chunks)
+
+Option 2 — Azure CLI queries:
+
+  Count documents in the knowledge base:
+    az cosmosdb sql query \
+      --account-name mynosqldbcomosb001 \
+      --resource-group rg-chatbot001 \
+      --database-name chatbot_db \
+      --container-name documents \
+      --query-text "SELECT VALUE COUNT(1) FROM c"
+
+  List ingested document sources:
+    az cosmosdb sql query \
+      --account-name mynosqldbcomosb001 \
+      --resource-group rg-chatbot001 \
+      --database-name chatbot_db \
+      --container-name documents \
+      --query-text "SELECT DISTINCT c.source, c.category FROM c"
+
+  View recent conversation turns:
+    az cosmosdb sql query \
+      --account-name mynosqldbcomosb001 \
+      --resource-group rg-chatbot001 \
+      --database-name chatbot_db \
+      --container-name conversations \
+      --query-text "SELECT c.session_id, c.role, c.content, c.timestamp FROM c ORDER BY c._ts DESC OFFSET 0 LIMIT 10"
+
+  Find all turns for a specific session:
+    az cosmosdb sql query \
+      --account-name mynosqldbcomosb001 \
+      --resource-group rg-chatbot001 \
+      --database-name chatbot_db \
+      --container-name conversations \
+      --query-text "SELECT c.role, c.content FROM c WHERE c.session_id = 'test-123' ORDER BY c._ts"
+
+Option 3 — Via the chatbot API:
+
+  Retrieve conversation history for a session:
+    GET http://52.186.91.141/api/history/<session_id>
+
+  This hits Redis first (fast cache), then falls back to Cosmos DB.
+  Returns: {"session_id": "...", "history": [{"role": "user", "content": "..."}, ...]}
+
+=== VERIFYING VECTOR SEARCH IS WORKING ===
+
+Send a chat message that should match ingested documents:
+  POST http://52.186.91.141/api/chat
+  Body: {"session_id": "verify-1", "message": "What is VectoChat?"}
+
+Check the response — it should include a "sources" array listing matched document chunks:
+  {
+    "reply": "...",
+    "session_id": "verify-1",
+    "sources": [
+      {"id": "...", "source": "product-overview.txt", "category": "general", "content_preview": "..."}
+    ]
+  }
+
+If sources is empty, no documents matched the query. Re-run ingest to populate Cosmos DB.
+
+=== HEALTH CHECK ===
+
+  GET http://52.186.91.141/health
+
+  Expected response when all services are connected:
+    {"status": "ok", "redis": "pong", "cosmos": "ok"}
+
+  If redis is unreachable: check REDIS_HOST and REDIS_PASSWORD in the Kubernetes secret.
+  If cosmos is unreachable: check COSMOS_ENDPOINT and COSMOS_KEY in the Kubernetes secret.

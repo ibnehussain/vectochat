@@ -1,0 +1,39 @@
+VectoChat — Azure Infrastructure Reference
+
+Resource Group : rg-chatbot001
+Location       : East US
+
+--- Azure Container Registry ---
+Name : acrchatbotfordemo123
+SKU  : Basic
+Stores the VectoChat Docker image (chatbot:latest).
+AKS pulls images using managed identity — no passwords stored.
+
+--- Azure Managed Redis (Redis Enterprise) ---
+Name           : redis-chatbot-fordemo123
+SKU            : Balanced_B0 (0.5 GB RAM)
+Port           : 10000 (TLS only)
+Eviction policy: AllKeysLRU
+Used for       : embedding cache (TTL 24h), conversation history cache (TTL 1h)
+
+--- Azure Kubernetes Service ---
+Name      : aks-chatbot
+Nodes     : 1 x Standard_A2_v2
+The chatbot runs as a single-replica Deployment.
+Exposed via a LoadBalancer Service on port 80 -> container port 8000.
+Secrets and config are injected via Kubernetes Secrets and ConfigMaps.
+
+--- Azure Cosmos DB NoSQL ---
+Account    : mynosqldbcomosb001
+Database   : chatbot_db
+Containers :
+  documents     — RAG knowledge base. Each item stores content + embedding vector.
+                  Vector search uses VectorDistance(c.embedding, @query_vector).
+  conversations — Persistent conversation history keyed by session_id.
+
+--- Azure AI Foundry ---
+Hub    : demochathub
+Endpoint: https://demochathub.services.ai.azure.com
+Models :
+  gpt-5.4                (chat via Responses API, no api-version param needed)
+  text-embedding-3-small (embeddings via /models/embeddings?api-version=2024-05-01-preview)

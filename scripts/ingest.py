@@ -21,10 +21,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
+import httpx
 import tiktoken
 from azure.cosmos import CosmosClient
-from azure.ai.inference import EmbeddingsClient
-from azure.core.credentials import AzureKeyCredential
+from urllib.parse import urlparse
 
 CHUNK_TOKENS = 500
 OVERLAP_TOKENS = 50
@@ -47,14 +47,23 @@ def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     return chunks
 
 
-def embed_texts(client: EmbeddingsClient, texts: list[str], model: str) -> list[list[float]]:
-    """Embed a batch of texts, splitting into sub-batches of 16."""
-    batch_size = 16
+def embed_texts(texts: list[str], model: str) -> list[list[float]]:
+    """Embed a batch of texts via Azure AI Foundry, splitting into sub-batches of 16."""
+    endpoint = os.environ["AZURE_FOUNDRY_ENDPOINT"].rstrip("/")
+    parsed = urlparse(endpoint)
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    api_version = os.environ.get("AZURE_FOUNDRY_EMBEDDING_API_VERSION", "2024-05-01-preview")
+    url = f"{base}/models/embeddings?api-version={api_version}"
+    headers = {"api-key": os.environ["AZURE_FOUNDRY_KEY"], "Content-Type": "application/json"}
     vectors: list[list[float]] = []
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i : i + batch_size]
-        response = client.embed(model=model, input=batch)
-        vectors.extend([item.embedding for item in response.data])
+    with httpx.Client(timeout=60.0) as client:
+        for i in range(0, len(texts), 16):
+            batch = texts[i : i + 16]
+            resp = client.post(url, headers=headers, json={"model": model, "input": batch})
+            if not resp.is_success:
+                print(f"  Embeddings API error {resp.status_code}: {resp.text}")
+            resp.raise_for_status()
+            vectors.extend([item["embedding"] for item in resp.json()["data"]])
     return vectors
 
 
@@ -85,11 +94,6 @@ def ingest_folder(folder: str, category: str) -> None:
         .get_database_client(os.environ["COSMOS_DATABASE"])
         .get_container_client(os.environ["COSMOS_DOCS_CONTAINER"])
     )
-
-    embedding_client = EmbeddingsClient(
-        endpoint=os.environ["AZURE_FOUNDRY_ENDPOINT"],
-        credential=AzureKeyCredential(os.environ["AZURE_FOUNDRY_KEY"]),
-    )
     embedding_model = os.environ["AZURE_FOUNDRY_EMBEDDING_MODEL"]
 
     total_upserted = 0
@@ -101,7 +105,7 @@ def ingest_folder(folder: str, category: str) -> None:
         print(f"  → {len(chunks)} chunks")
 
         # Embed all chunks for this file
-        vectors = embed_texts(embedding_client, chunks, embedding_model)
+        vectors = embed_texts(chunks, embedding_model)
 
         # Upsert to CosmosDB
         for idx, (chunk, vector) in enumerate(zip(chunks, vectors)):

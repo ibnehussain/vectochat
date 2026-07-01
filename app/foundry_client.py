@@ -1,36 +1,37 @@
 import os
 import logging
-from functools import lru_cache
+from urllib.parse import urlparse
 
-from azure.ai.inference import ChatCompletionsClient, EmbeddingsClient
-from azure.ai.inference.models import SystemMessage, UserMessage, AssistantMessage
-from azure.core.credentials import AzureKeyCredential
+import httpx
 
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def _get_chat_client() -> ChatCompletionsClient:
-    endpoint = os.environ["AZURE_FOUNDRY_ENDPOINT"]
-    key = os.environ["AZURE_FOUNDRY_KEY"]
-    return ChatCompletionsClient(
-        endpoint=endpoint,
-        credential=AzureKeyCredential(key),
-    )
+def _base_url() -> str:
+    """Extract just the scheme + host from AZURE_FOUNDRY_ENDPOINT."""
+    parsed = urlparse(os.environ["AZURE_FOUNDRY_ENDPOINT"])
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
-@lru_cache(maxsize=1)
-def _get_embedding_client() -> EmbeddingsClient:
-    endpoint = os.environ["AZURE_FOUNDRY_ENDPOINT"]
-    key = os.environ["AZURE_FOUNDRY_KEY"]
-    return EmbeddingsClient(
-        endpoint=endpoint,
-        credential=AzureKeyCredential(key),
-    )
+def _responses_url() -> str:
+    return os.environ["AZURE_FOUNDRY_ENDPOINT"].rstrip("/")
+
+
+def _embeddings_url() -> str:
+    # Azure AI Inference style: <host>/models/embeddings
+    api_version = os.environ.get("AZURE_FOUNDRY_EMBEDDING_API_VERSION", "2024-05-01-preview")
+    return f"{_base_url()}/models/embeddings?api-version={api_version}"
+
+
+def _headers() -> dict:
+    return {
+        "api-key": os.environ["AZURE_FOUNDRY_KEY"],
+        "Content-Type": "application/json",
+    }
 
 
 def get_chat_completion(messages: list[dict]) -> str:
-    """Call the Foundry chat completions endpoint.
+    """Call the Foundry Responses API endpoint.
 
     Args:
         messages: List of dicts with 'role' and 'content' keys.
@@ -38,24 +39,29 @@ def get_chat_completion(messages: list[dict]) -> str:
     Returns:
         The assistant reply string.
     """
-    client = _get_chat_client()
     model = os.environ["AZURE_FOUNDRY_CHAT_MODEL"]
 
-    sdk_messages = []
-    for msg in messages:
-        role = msg["role"]
-        content = msg["content"]
-        if role == "system":
-            sdk_messages.append(SystemMessage(content=content))
-        elif role == "user":
-            sdk_messages.append(UserMessage(content=content))
-        elif role == "assistant":
-            sdk_messages.append(AssistantMessage(content=content))
+    input_messages = []
+    instructions: str | None = None
+    for m in messages:
+        if m["role"] == "system":
+            instructions = m["content"]
         else:
-            logger.warning("Unknown message role '%s' — skipping.", role)
+            input_messages.append({"role": m["role"], "content": m["content"]})
 
-    response = client.complete(model=model, messages=sdk_messages)
-    return response.choices[0].message.content
+    payload: dict = {"model": model, "input": input_messages}
+    if instructions:
+        payload["instructions"] = instructions
+
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(_responses_url(), headers=_headers(), json=payload)
+        if not resp.is_success:
+            logger.error("Responses API error %s: %s", resp.status_code, resp.text)
+        resp.raise_for_status()
+        data = resp.json()
+
+    # Responses API shape: output[0].content[0].text
+    return data["output"][0]["content"][0]["text"]
 
 
 def get_embedding(text: str) -> list[float]:
@@ -65,9 +71,20 @@ def get_embedding(text: str) -> list[float]:
         text: The text to embed.
 
     Returns:
-        A list of floats representing the 1536-dimensional embedding.
+        A list of floats representing the embedding vector.
     """
-    client = _get_embedding_client()
     model = os.environ["AZURE_FOUNDRY_EMBEDDING_MODEL"]
-    response = client.embed(model=model, input=[text])
-    return response.data[0].embedding
+
+    with httpx.Client(timeout=30.0) as client:
+        resp = client.post(
+            _embeddings_url(),
+            headers=_headers(),
+            json={"model": model, "input": [text]},  # input must be an array
+        )
+        if not resp.is_success:
+            logger.error("Embeddings API error %s: %s", resp.status_code, resp.text)
+        resp.raise_for_status()
+        data = resp.json()
+
+    return data["data"][0]["embedding"]
+

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: chatbot
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: chatbot
@@ -49,15 +49,9 @@ spec:
             failureThreshold: 3
           securityContext:
             runAsNonRoot: true
+            runAsUser: 1001
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
             capabilities:
               drop:
                 - ALL
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: DoNotSchedule
-          labelSelector:
-            matchLabels:
-              app: chatbot

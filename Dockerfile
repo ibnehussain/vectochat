@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 # Security: run as non-root user
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+RUN addgroup --system --gid 1001 appgroup && adduser --system --uid 1001 --ingroup appgroup appuser
 
 WORKDIR /app
 
