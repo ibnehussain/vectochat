@@ -49,7 +49,15 @@ Azure resources you must provision **before** local development:
 - **Azure AI Foundry hub** with deployed models:
   - Chat model: `gpt-4o` (or any GPT-4-family model)
   - Embedding model: `text-embedding-3-small`
-- **Azure Cosmos DB for NoSQL** account
+- **Azure Cosmos DB for NoSQL** account with two containers:
+
+  | Container | Partition Key | Purpose |
+  |---|---|---|
+  | `documents` | `/category` | Stores document chunks with DiskANN cosine vector index on `/embedding` (float32, 1536 dims) |
+  | `conversations` | `/session_id` | Stores per-session conversation history |
+
+  > Run `python -m scripts.setup_cosmos` to create the database and both containers automatically.
+
 - **Azure Managed Redis** Balanced_B0 (0.5 GB) *(or let `deploy.sh` create it)*
 
 ---
