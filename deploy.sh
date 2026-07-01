@@ -16,7 +16,7 @@ NODE_COUNT=2
 NODE_VM="Standard_D2s_v3"
 
 echo "════════════════════════════════════════════════════"
-echo " RAG Chatbot — Azure Deployment"
+echo " VectoChat — Azure Deployment"
 echo " Resource Group : ${RESOURCE_GROUP}"
 echo " Location       : ${LOCATION}"
 echo " ACR            : ${ACR_NAME}"
@@ -39,39 +39,48 @@ az acr create \
   --admin-enabled false \
   --output none
 
-# ── 3. Azure Cache for Redis (Standard C1) ────────────────────────────────────
+# ── 3. Azure Managed Redis (Balanced_B0 — 0.5 GB) ───────────────────────────
 echo ""
-echo "[3/8] Creating Azure Cache for Redis '${REDIS_NAME}' (Standard C1)…"
-echo "      This typically takes 10-20 minutes. Waiting…"
-az redis create \
+echo "[3/8] Creating Azure Managed Redis '${REDIS_NAME}' (Balanced_B0 — 0.5 GB)…"
+echo "      This typically takes 5-10 minutes. Waiting…"
+az redisenterprise create \
   --resource-group "${RESOURCE_GROUP}" \
-  --name "${REDIS_NAME}" \
+  --cluster-name "${REDIS_NAME}" \
   --location "${LOCATION}" \
-  --sku Standard \
-  --vm-size c1 \
-  --minimum-tls-version "1.2" \
+  --sku "Balanced_B0" \
   --output none
 
-# Poll until provisioning completes
-echo "      Waiting for Redis provisioning to complete…"
+# Create the default database on the cluster
+az redisenterprise database create \
+  --resource-group "${RESOURCE_GROUP}" \
+  --cluster-name "${REDIS_NAME}" \
+  --name "default" \
+  --client-protocol "Encrypted" \
+  --eviction-policy "AllKeysLRU" \
+  --output none
+
+# Poll until cluster provisioning completes
+echo "      Waiting for Azure Managed Redis provisioning to complete…"
 while true; do
-  STATE=$(az redis show \
+  STATE=$(az redisenterprise show \
     --resource-group "${RESOURCE_GROUP}" \
-    --name "${REDIS_NAME}" \
+    --cluster-name "${REDIS_NAME}" \
     --query "provisioningState" \
     --output tsv)
   echo "      State: ${STATE}"
   if [[ "${STATE}" == "Succeeded" ]]; then break; fi
   if [[ "${STATE}" == "Failed" ]]; then
-    echo "ERROR: Redis provisioning failed." >&2; exit 1
+    echo "ERROR: Azure Managed Redis provisioning failed." >&2; exit 1
   fi
   sleep 30
 done
 
-REDIS_HOST="${REDIS_NAME}.redis.cache.windows.net"
-REDIS_KEY=$(az redis list-keys \
+# Azure Managed Redis hostname and port (TLS 10000)
+REDIS_HOST="${REDIS_NAME}.${LOCATION}.redisenterprise.cache.azure.net"
+REDIS_KEY=$(az redisenterprise database list-keys \
   --resource-group "${RESOURCE_GROUP}" \
-  --name "${REDIS_NAME}" \
+  --cluster-name "${REDIS_NAME}" \
+  --name "default" \
   --query "primaryKey" --output tsv)
 
 # ── 4. AKS Cluster ────────────────────────────────────────────────────────────

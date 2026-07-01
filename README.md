@@ -7,7 +7,7 @@ A production-ready conversational AI chatbot built with Python and FastAPI, back
 | LLM + Embeddings | Azure AI Foundry (GPT-4o + text-embedding-3-small) |
 | Vector search | Azure Cosmos DB for NoSQL — DiskANN cosine index |
 | Conversation history | Azure Cosmos DB for NoSQL |
-| Caching | Azure Cache for Redis Standard C1 |
+| Caching | Azure Managed Redis — Balanced_B0 (0.5 GB) |
 | Container runtime | Docker (Python 3.11-slim) |
 | Orchestration | Azure Kubernetes Service (AKS) |
 | Image registry | Azure Container Registry (ACR) |
@@ -50,7 +50,7 @@ Azure resources you must provision **before** local development:
   - Chat model: `gpt-4o` (or any GPT-4-family model)
   - Embedding model: `text-embedding-3-small`
 - **Azure Cosmos DB for NoSQL** account
-- **Azure Cache for Redis** Standard C1 *(or let `deploy.sh` create it)*
+- **Azure Managed Redis** Balanced_B0 (0.5 GB) *(or let `deploy.sh` create it)*
 
 ---
 
@@ -135,6 +135,8 @@ REDIS_TLS=true
 
 > **Local Redis shortcut:** `docker run -p 6379:6379 redis:7-alpine` then set `REDIS_HOST=127.0.0.1 REDIS_PORT=6379 REDIS_PASSWORD= REDIS_TLS=false`.
 
+> **Azure Managed Redis port:** Production uses port `10000` (TLS). The `configmap.yaml` is pre-set to `10000`.
+
 ### 1.3 Set up Cosmos DB (one-time)
 
 ```bash
@@ -217,7 +219,7 @@ bash deploy.sh
 |---|---|
 | 1 | `az group create` — resource group `rg-chatbot` in `eastus` |
 | 2 | `az acr create` — Azure Container Registry (Basic SKU) |
-| 3 | `az redis create` — Azure Cache for Redis Standard C1, TLS 1.2, waits until `Succeeded` (~15 min) |
+| 3 | `az redisenterprise create` + `az redisenterprise database create` — Azure Managed Redis Balanced_B0 (0.5 GB), TLS, polls until `Succeeded` (~5-10 min) |
 | 4 | `az aks create` — 2-node AKS cluster (Standard_D2s_v3), attached to ACR, managed identity |
 | 5 | `az aks get-credentials` — merges kube context locally |
 | 6 | `docker build` + `docker push` — image pushed to ACR |
@@ -319,7 +321,7 @@ All values set via Kubernetes ConfigMap (`k8s/configmap.yaml`) and Secret (`k8s/
 | `COSMOS_CONV_CONTAINER` | ConfigMap | `conversations` | Chat history container |
 | `REDIS_HOST` | Secret | — | Redis hostname |
 | `REDIS_PASSWORD` | Secret | — | Redis access key |
-| `REDIS_PORT` | ConfigMap | `6380` | Redis port (6380 = TLS) |
+| `REDIS_PORT` | ConfigMap | `10000` | Redis port (10000 = Azure Managed Redis TLS) |
 | `REDIS_TLS` | ConfigMap | `true` | Enable TLS for Redis |
 | `TOP_K` | ConfigMap | `5` | Document chunks returned per query |
 | `MAX_HISTORY` | ConfigMap | `20` | Max conversation turns in prompt |
