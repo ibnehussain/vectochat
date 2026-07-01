@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chatbot-config
+  namespace: chatbot
+data:
+  COSMOS_DATABASE: "chatbot_db"
+  COSMOS_DOCS_CONTAINER: "documents"
+  COSMOS_CONV_CONTAINER: "conversations"
+  AZURE_FOUNDRY_CHAT_MODEL: "gpt-4o"
+  AZURE_FOUNDRY_EMBEDDING_MODEL: "text-embedding-3-small"
+  REDIS_PORT: "6380"
+  REDIS_TLS: "true"
+  TOP_K: "5"
+  MAX_HISTORY: "20"
+  EMBEDDING_CACHE_TTL: "86400"
+  HISTORY_CACHE_TTL: "3600"
+  ENABLE_DOCS: "false"
