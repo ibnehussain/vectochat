@@ -52,14 +52,14 @@ def embed_texts(texts: list[str], model: str) -> list[list[float]]:
     endpoint = os.environ["AZURE_FOUNDRY_ENDPOINT"].rstrip("/")
     parsed = urlparse(endpoint)
     base = f"{parsed.scheme}://{parsed.netloc}"
-    api_version = os.environ.get("AZURE_FOUNDRY_EMBEDDING_API_VERSION", "2024-05-01-preview")
-    url = f"{base}/models/embeddings?api-version={api_version}"
+    api_version = os.environ.get("AZURE_FOUNDRY_EMBEDDING_API_VERSION", "2024-10-21")
+    url = f"{base}/openai/deployments/{model}/embeddings?api-version={api_version}"
     headers = {"api-key": os.environ["AZURE_FOUNDRY_KEY"], "Content-Type": "application/json"}
     vectors: list[list[float]] = []
     with httpx.Client(timeout=60.0) as client:
         for i in range(0, len(texts), 16):
             batch = texts[i : i + 16]
-            resp = client.post(url, headers=headers, json={"model": model, "input": batch})
+            resp = client.post(url, headers=headers, json={"input": batch})
             if not resp.is_success:
                 print(f"  Embeddings API error {resp.status_code}: {resp.text}")
             resp.raise_for_status()

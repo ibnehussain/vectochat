@@ -4,7 +4,7 @@ metadata:
   name: chatbot-config
   namespace: chatbot
 data:
-  COSMOS_DATABASE: "chatbot_db"
+  COSMOS_DATABASE: "chatbot"
   COSMOS_DOCS_CONTAINER: "documents"
   COSMOS_CONV_CONTAINER: "conversations"
   AZURE_FOUNDRY_CHAT_MODEL: "gpt-4o"

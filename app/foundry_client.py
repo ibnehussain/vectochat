@@ -13,14 +13,14 @@ def _base_url() -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _responses_url() -> str:
-    return os.environ["AZURE_FOUNDRY_ENDPOINT"].rstrip("/")
+def _chat_completions_url(model: str) -> str:
+    api_version = os.environ.get("AZURE_FOUNDRY_CHAT_API_VERSION", "2024-10-21")
+    return f"{_base_url()}/openai/deployments/{model}/chat/completions?api-version={api_version}"
 
 
-def _embeddings_url() -> str:
-    # Azure AI Inference style: <host>/models/embeddings
-    api_version = os.environ.get("AZURE_FOUNDRY_EMBEDDING_API_VERSION", "2024-05-01-preview")
-    return f"{_base_url()}/models/embeddings?api-version={api_version}"
+def _embeddings_url(model: str) -> str:
+    api_version = os.environ.get("AZURE_FOUNDRY_EMBEDDING_API_VERSION", "2024-10-21")
+    return f"{_base_url()}/openai/deployments/{model}/embeddings?api-version={api_version}"
 
 
 def _headers() -> dict:
@@ -31,7 +31,7 @@ def _headers() -> dict:
 
 
 def get_chat_completion(messages: list[dict]) -> str:
-    """Call the Foundry Responses API endpoint.
+    """Call the Azure OpenAI Chat Completions endpoint.
 
     Args:
         messages: List of dicts with 'role' and 'content' keys.
@@ -41,27 +41,18 @@ def get_chat_completion(messages: list[dict]) -> str:
     """
     model = os.environ["AZURE_FOUNDRY_CHAT_MODEL"]
 
-    input_messages = []
-    instructions: str | None = None
-    for m in messages:
-        if m["role"] == "system":
-            instructions = m["content"]
-        else:
-            input_messages.append({"role": m["role"], "content": m["content"]})
-
-    payload: dict = {"model": model, "input": input_messages}
-    if instructions:
-        payload["instructions"] = instructions
-
     with httpx.Client(timeout=60.0) as client:
-        resp = client.post(_responses_url(), headers=_headers(), json=payload)
+        resp = client.post(
+            _chat_completions_url(model),
+            headers=_headers(),
+            json={"messages": messages},
+        )
         if not resp.is_success:
-            logger.error("Responses API error %s: %s", resp.status_code, resp.text)
+            logger.error("Chat Completions API error %s: %s", resp.status_code, resp.text)
         resp.raise_for_status()
         data = resp.json()
 
-    # Responses API shape: output[0].content[0].text
-    return data["output"][0]["content"][0]["text"]
+    return data["choices"][0]["message"]["content"]
 
 
 def get_embedding(text: str) -> list[float]:
@@ -77,9 +68,9 @@ def get_embedding(text: str) -> list[float]:
 
     with httpx.Client(timeout=30.0) as client:
         resp = client.post(
-            _embeddings_url(),
+            _embeddings_url(model),
             headers=_headers(),
-            json={"model": model, "input": [text]},  # input must be an array
+            json={"input": [text]},
         )
         if not resp.is_success:
             logger.error("Embeddings API error %s: %s", resp.status_code, resp.text)

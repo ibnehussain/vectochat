@@ -1,0 +1,36 @@
+AI-200: Foundations of Azure AI Services
+
+Course Overview
+AI-200 is an introductory course designed for developers, data engineers, and cloud architects who want to build intelligent applications using Azure AI Services. The course covers the core concepts of artificial intelligence, machine learning, and the Azure-specific tooling required to deploy production-ready AI solutions. No prior AI experience is required, though familiarity with Python and basic cloud concepts is recommended.
+
+Learning Objectives
+By the end of AI-200, students will be able to:
+- Understand the difference between AI, machine learning, and deep learning
+- Navigate the Azure AI Services portfolio including Azure OpenAI, Azure AI Vision, Azure AI Speech, and Azure AI Language
+- Deploy and consume language models using Azure AI Foundry
+- Build retrieval-augmented generation (RAG) pipelines using vector search
+- Integrate AI capabilities into web and API applications
+- Apply responsible AI principles including fairness, transparency, and privacy
+
+Course Modules
+
+Module 1 — Introduction to Azure AI
+This module introduces the Azure AI ecosystem. Students explore the Azure portal, learn how to create Cognitive Services and AI Services resources, and make their first REST API calls. Topics include resource provisioning, API keys, managed identity authentication, and regional availability.
+
+Module 2 — Language and Chat Models
+Students are introduced to large language models (LLMs) available through Azure OpenAI Service. The module covers prompt engineering, system messages, token limits, and how to call the Chat Completions API. Students build a simple command-line chatbot using the Python SDK and the Azure AI Inference library.
+
+Module 3 — Embeddings and Vector Search
+This module explains how text embeddings work and why they are useful for semantic search. Students generate embeddings using the text-embedding-3-small model and store vectors in Azure Cosmos DB with vector indexing enabled. They then implement similarity search to retrieve the most relevant document chunks for a given query.
+
+Module 4 — Building a RAG Application
+Students combine the skills from Modules 2 and 3 to build a complete RAG (Retrieval-Augmented Generation) pipeline. A document ingestion script chunks and embeds .txt files into Cosmos DB. At query time, the top matching chunks are retrieved and injected into the LLM prompt as context. Students deploy the application as a FastAPI service on Azure Kubernetes Service (AKS).
+
+Module 5 — Responsible AI and Production Readiness
+The final module addresses content filtering, safety configurations, monitoring with Azure Monitor, and cost management. Students learn how to set token budgets, implement logging, and apply Azure AI content filters. The module also covers rate limiting, retry logic, and blue-green deployment strategies for AI workloads.
+
+Assessment and Certification
+AI-200 is assessed through three hands-on labs and a final project. Students who complete all assessments with a passing score receive the AI-200 Completion Certificate, which counts as a prerequisite for the AI-300: Advanced Azure AI Solutions course.
+
+Prerequisites: Basic Python, Azure fundamentals (AZ-900 level), familiarity with REST APIs.
+Duration: 16 hours (self-paced) or 2-day instructor-led workshop.

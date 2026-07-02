@@ -4,31 +4,31 @@ import logging
 import os
 from typing import Optional
 
-import redis.asyncio as aioredis
+from redis.asyncio.cluster import RedisCluster
+from redis.asyncio.cluster import ClusterNode
 
 logger = logging.getLogger(__name__)
 
-_redis_client: Optional[aioredis.Redis] = None
+_redis_client: Optional[RedisCluster] = None
 
 # Key prefixes
 _HISTORY_PREFIX = "chatbot:history:"
 _EMBEDDING_PREFIX = "chatbot:emb:"
 
 
-def _get_client() -> aioredis.Redis:
+def _get_client() -> RedisCluster:
     global _redis_client
     if _redis_client is None:
         host = os.environ["REDIS_HOST"]
-        port = int(os.environ.get("REDIS_PORT", "6380"))
+        port = int(os.environ.get("REDIS_PORT", "10000"))
         password = os.environ["REDIS_PASSWORD"]
         tls = os.environ.get("REDIS_TLS", "true").lower() == "true"
 
-        _redis_client = aioredis.Redis(
-            host=host,
-            port=port,
+        _redis_client = RedisCluster(
+            startup_nodes=[ClusterNode(host=host, port=port)],
             password=password,
             ssl=tls,
-            ssl_cert_reqs=None,   # Azure uses self-signed-compatible certs
+            ssl_cert_reqs=None,
             decode_responses=True,
             socket_connect_timeout=5,
             socket_timeout=5,
